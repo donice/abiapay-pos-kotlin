@@ -1,222 +1,181 @@
 package com.yourcompany.hydrogenbridgeapp
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.content.pm.PackageInfo
-import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.webkit.*
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.yourcompany.hydrogenbridgeapp.commonsdk.printer.USBPrint
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val PAYMENT_REQUEST_CODE = 100
+    private val PRINT_REQUEST_CODE = 101
+    private var tvPrinterInfo: TextView? = null
+    private var usbPrint: USBPrint? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check WebView version
-        checkWebViewVersion()
+        // Enable remote debugging for development
+        WebView.setWebContentsDebuggingEnabled(true)
 
-        // Enable WebView debugging
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
-
-        webView = WebView(this)
-        setupWebView()
-
-        setContentView(webView)
-        webView.loadUrl("https://abiapay-pos-donice.vercel.app/signin")
-    }
-
-    private fun checkWebViewVersion() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val webViewPackage: PackageInfo? = WebView.getCurrentWebViewPackage()
-                val version = webViewPackage?.versionName ?: "Unknown"
-                android.util.Log.d("WebView", "WebView version: $version")
-
-                // Show warning if version is too old
-                if (version.startsWith("74") || version.startsWith("75")) {
-                    Toast.makeText(
-                        this,
-                        "WebView is outdated (v$version). Please update Android System WebView from Play Store",
-                        Toast.LENGTH_LONG
-                    ).show()
+        usbPrint = USBPrint(this) { data ->
+            runOnUiThread {
+                tvPrinterInfo?.text = when (data) {
+                    0 -> "Printer status:Normal"
+                    16 -> "Printer status:No paper"
+                    else -> "Printer status:Error"
                 }
             }
-        } catch (e: Exception) {
-            android.util.Log.e("WebView", "Error checking WebView version: ${e.message}")
         }
+        webView = WebView(this)
+        setupWebView()
+        setContentView(webView)
+
+        // Load your application URL
+        webView.loadUrl("https://abiapay-pos.vercel.app/signin/")
     }
 
-    // Rest of your code stays the same...
     private fun setupWebView() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
             setSupportZoom(true)
-            builtInZoomControls = false
-            loadWithOverviewMode = true
             useWideViewPort = true
-
+            loadWithOverviewMode = true
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            
+            // Fix for Android 10 WebView issues
             cacheMode = WebSettings.LOAD_DEFAULT
             allowFileAccess = true
             allowContentAccess = true
-
-            userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
-            }
         }
 
+        // Register the bridge
         webView.addJavascriptInterface(PaymentBridge(), "HydrogenBridge")
 
         webView.webViewClient = object : WebViewClient() {
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                super.onReceivedError(view, request, error)
-                val errorMsg = "Error: ${error?.description}"
-                android.util.Log.e("WebView", errorMsg)
-
-                // Auto-reload on chunk errors
-                if (error?.description?.contains("ChunkLoadError") == true ||
-                    error?.description?.contains("Loading chunk") == true) {
-                    Toast.makeText(this@MainActivity, "Reloading due to loading error...", Toast.LENGTH_SHORT).show()
-                    view?.reload()
-                }
-            }
-        }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                android.util.Log.d("WebViewConsole", "${consoleMessage.message()} -- Line ${consoleMessage.lineNumber()}")
-
-                // Auto-reload on chunk errors in console
-                if (consoleMessage.message().contains("ChunkLoadError") ||
-                    consoleMessage.message().contains("Loading chunk")) {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "Reloading page...", Toast.LENGTH_SHORT).show()
-                        webView.reload()
-                    }
-                }
-                return true
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                Log.d("WebView", "Page loaded: $url")
             }
         }
     }
 
+    inner class PrinterBridge(private val usbPrint: USBPrint) {
+
+        @JavascriptInterface
+        fun sendToPrinter(jsonString: String) {
+            usbPrint.printContent(jsonString) { status ->
+                // You can log status or send it back to JS
+                Log.d("Bridge", "Printer Status: $status")
+            }
+        }
+    }
     inner class PaymentBridge {
 
         @JavascriptInterface
-        fun initiateCardPayment(amount: Int) {
+        fun initiateCardPayment(amount: Float) {
+            Log.d("HydrogenPayment", "initiateCardPayment: $amount")
             runOnUiThread {
-                launchHydrogenPayment("com.hydrogen.card_payment", amount)
+                launchHydrogenIntent("com.hydrogen.card_payment", amount)
             }
         }
 
         @JavascriptInterface
-        fun initiateBreezePay(amount: Int) {
+        fun initiateTransfer(amount: Float) {
+            Log.d("HydrogenPayment", "initiateTransfer: $amount")
             runOnUiThread {
-                launchHydrogenPayment("com.hydrogen.breezepay", amount)
+                launchHydrogenIntent("com.hydrogen.transfer", amount)
             }
         }
 
-        @JavascriptInterface
-        fun initiateTransfer(amount: Int) {
-            runOnUiThread {
-                launchHydrogenPayment("com.hydrogen.transfer", amount)
-            }
-        }
-
-        @JavascriptInterface
-        fun showTransactionHistory() {
-            runOnUiThread {
-                launchHydrogenPayment("com.hydrogen.transaction_history", 0)
-            }
-        }
-
-        @JavascriptInterface
-        fun isHydrogenAppInstalled(): Boolean {
-            val intent = Intent("com.hydrogen.card_payment")
-            return intent.resolveActivity(packageManager) != null
-        }
-    }
-
-    private fun launchHydrogenPayment(action: String, amount: Int) {
-        try {
-            val intent = Intent(action)
-            if (amount > 0) {
-                intent.putExtra("REQUEST_KEY", amount)
-            }
-
-            if (intent.resolveActivity(packageManager) != null) {
+        private fun launchHydrogenIntent(action: String, amount: Float) {
+            try {
+                val intent = Intent(action).apply {
+                    putExtra("REQUEST_KEY", amount)
+                }
                 startActivityForResult(intent, PAYMENT_REQUEST_CODE)
-            } else {
-                Toast.makeText(this, "Hydrogen Neo App is not installed", Toast.LENGTH_LONG).show()
-                sendErrorToWebApp("Hydrogen Neo App not installed")
+            } catch (e: Exception) {
+                sendFullResultToWeb("FAILED", "Target App ($action) not found")
             }
-        } catch (e: Exception) {
-            Toast.makeText(this, "Error launching payment: ${e.message}", Toast.LENGTH_LONG).show()
-            sendErrorToWebApp(e.message ?: "Unknown error")
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == PAYMENT_REQUEST_CODE) {
-            when (resultCode) {
-                Activity.RESULT_OK -> {
-                    val result = data?.getStringExtra("RESULT_KEY") ?: "SUCCESS"
-                    sendResultToWebApp(result, "SUCCESS")
+        when (requestCode) {
+            PAYMENT_REQUEST_CODE -> {
+                val resultString = data?.getStringExtra("RESULT_KEY") ?: ""
+                val isApproved = resultString.contains("responseCode=00") || resultString.contains("SUCCESS")
+
+                val status = when {
+                    resultCode == Activity.RESULT_OK && isApproved -> "SUCCESS"
+                    resultString.contains("CANCELLED") || resultCode == Activity.RESULT_CANCELED -> "CANCELLED"
+                    else -> "FAILED"
                 }
-                Activity.RESULT_CANCELED -> {
-                    val result = data?.getStringExtra("RESULT_KEY") ?: "Transaction cancelled"
-                    sendResultToWebApp(result, "CANCELLED")
-                }
-                else -> {
-                    val result = data?.getStringExtra("RESULT_KEY") ?: "Transaction failed"
-                    sendResultToWebApp(result, "FAILED")
-                }
+
+                sendFullResultToWeb(status, resultString)
+            }
+            PRINT_REQUEST_CODE -> {
+                val resultString = data?.getStringExtra("RESULT_KEY") ?: ""
+                Log.d("HydrogenPayment", "Print result: $resultString")
             }
         }
     }
 
-    private fun sendResultToWebApp(result: String, status: String) {
-        val json = JSONObject().apply {
+    private fun sendFullResultToWeb(status: String, rawResult: String) {
+        val response = JSONObject().apply {
             put("status", status)
-            put("data", result)
+            put("raw", rawResult)
+            
+            val details = JSONObject()
+            if (rawResult.contains("CardMessageData")) {
+                try {
+                    val content = rawResult.substringAfter("(").substringBeforeLast(")")
+                    content.split(",").forEach { pair ->
+                        val kv = pair.split("=")
+                        if (kv.size == 2) {
+                            details.put(kv[0].trim(), kv[1].trim())
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("HydrogenPayment", "Parse Error: ${e.message}")
+                }
+            } else {
+                details.put("error_message", rawResult)
+            }
+            put("details", details)
         }
 
-        val jsCode = "if(typeof handleHydrogenPaymentResult === 'function') { handleHydrogenPaymentResult($json); }"
-        webView.evaluateJavascript(jsCode, null)
-    }
-
-    private fun sendErrorToWebApp(error: String) {
-        val json = JSONObject().apply {
-            put("status", "ERROR")
-            put("message", error)
+        webView.post {
+            webView.evaluateJavascript(
+                "if(window.handleHydrogenPaymentResult) { window.handleHydrogenPaymentResult($response); }",
+                null
+            )
         }
-
-        val jsCode = "if(typeof handleHydrogenPaymentResult === 'function') { handleHydrogenPaymentResult($json); }"
-        webView.evaluateJavascript(jsCode, null)
     }
 
+
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
+        finish()
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
+
+    override fun onDestroy() {
+        usbPrint?.closePrinter()
+        super.onDestroy()
     }
 }

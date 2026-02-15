@@ -36,6 +36,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+    aaptOptions {
+        noCompress ("jpg","bmp" )// 禁用png压缩
+    }
 
     kotlinOptions {
         jvmTarget = "1.8"
@@ -46,4 +49,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
+
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    implementation("com.github.yuriy-budiyev:code-scanner:2.3.0")
 }
