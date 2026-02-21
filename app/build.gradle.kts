@@ -13,7 +13,7 @@ android {
         applicationId = "com.yourcompany.hydrogenbridgeapp"
 
         // Android 7.0+ devices
-        minSdk = 24
+        minSdk = 25
 
         // Android 10
         targetSdk = 29

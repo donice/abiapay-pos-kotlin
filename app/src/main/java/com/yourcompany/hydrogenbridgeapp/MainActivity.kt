@@ -1,13 +1,11 @@
 package com.yourcompany.hydrogenbridgeapp
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.webkit.*
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.yourcompany.hydrogenbridgeapp.commonsdk.printer.USBPrint
 import org.json.JSONObject
@@ -16,7 +14,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val PAYMENT_REQUEST_CODE = 100
-    private val PRINT_REQUEST_CODE = 101
     private var tvPrinterInfo: TextView? = null
     private var usbPrint: USBPrint? = null
 
@@ -26,21 +23,23 @@ class MainActivity : AppCompatActivity() {
         // Enable remote debugging for development
         WebView.setWebContentsDebuggingEnabled(true)
 
-        usbPrint = USBPrint(this) { data ->
+        // Initialize USBPrint with a listener
+        usbPrint = USBPrint(this, USBPrint.OnTPRINTERSuccessListener { data ->
             runOnUiThread {
                 tvPrinterInfo?.text = when (data) {
-                    0 -> "Printer status:Normal"
-                    16 -> "Printer status:No paper"
-                    else -> "Printer status:Error"
+                    0 -> "Printer status: Normal"
+                    16 -> "Printer status: No paper"
+                    else -> "Printer status: Error ($data)"
                 }
             }
-        }
+        })
+
         webView = WebView(this)
         setupWebView()
         setContentView(webView)
 
         // Load your application URL
-        webView.loadUrl("https://abiapay-pos.vercel.app/signin/")
+        webView.loadUrl("https://hydrogen.abiaone.com/signin/")
     }
 
     private fun setupWebView() {
@@ -59,8 +58,11 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = true
         }
 
-        // Register the bridge
-        webView.addJavascriptInterface(PaymentBridge(), "HydrogenBridge")
+        // Register the bridges
+        usbPrint?.let {
+            webView.addJavascriptInterface(PrinterBridge(it), "HydrogenBridge")
+        }
+        webView.addJavascriptInterface(PaymentBridge(), "HydrogenPaymentBridge")
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -70,18 +72,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    inner class PrinterBridge(private val usbPrint: USBPrint) {
-
+    inner class PrinterBridge(private val printer: USBPrint) {
         @JavascriptInterface
-        fun sendToPrinter(jsonString: String) {
-            usbPrint.printContent(jsonString) { status ->
-                // You can log status or send it back to JS
-                Log.d("Bridge", "Printer Status: $status")
-            }
+        fun printReceipt(jsonString: String) {
+            printer.printContent_58(jsonString, USBPrint.OnTPRINTERSuccessListener { data ->
+                runOnUiThread {
+                    tvPrinterInfo?.text = when (data) {
+                        0 -> "Printer status: Normal"
+                        16 -> "Printer status: No paper"
+                        else -> "Printer status: Error ($data)"
+                    }
+                }
+            })
         }
     }
-    inner class PaymentBridge {
 
+    inner class PaymentBridge {
         @JavascriptInterface
         fun initiateCardPayment(amount: Float) {
             Log.d("HydrogenPayment", "initiateCardPayment: $amount")
@@ -114,23 +120,17 @@ class MainActivity : AppCompatActivity() {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
 
-        when (requestCode) {
-            PAYMENT_REQUEST_CODE -> {
-                val resultString = data?.getStringExtra("RESULT_KEY") ?: ""
-                val isApproved = resultString.contains("responseCode=00") || resultString.contains("SUCCESS")
+        if (requestCode == PAYMENT_REQUEST_CODE) {
+            val resultString = data?.getStringExtra("RESULT_KEY") ?: ""
+            val isApproved = resultString.contains("responseCode=00") || resultString.contains("SUCCESS")
 
-                val status = when {
-                    resultCode == Activity.RESULT_OK && isApproved -> "SUCCESS"
-                    resultString.contains("CANCELLED") || resultCode == Activity.RESULT_CANCELED -> "CANCELLED"
-                    else -> "FAILED"
-                }
+            val status = when {
+                resultCode == Activity.RESULT_OK && isApproved -> "SUCCESS"
+                resultString.contains("CANCELLED") || resultCode == Activity.RESULT_CANCELED -> "CANCELLED"
+                else -> "FAILED"
+            }
 
-                sendFullResultToWeb(status, resultString)
-            }
-            PRINT_REQUEST_CODE -> {
-                val resultString = data?.getStringExtra("RESULT_KEY") ?: ""
-                Log.d("HydrogenPayment", "Print result: $resultString")
-            }
+            sendFullResultToWeb(status, resultString)
         }
     }
 
@@ -166,12 +166,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        finish()
-        @Suppress("DEPRECATION")
-        super.onBackPressed()
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
     }
 
     override fun onDestroy() {
