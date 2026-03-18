@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(webView)
 
         // Load your application URL
-        webView.loadUrl("https://hydrogen.abiaone.com/signin/")
+        webView.loadUrl("https://abiapay-pos.vercel.app/signin/")
     }
 
     private fun setupWebView() {
@@ -57,6 +57,9 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = true
             allowContentAccess = true
         }
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
 
         // Register the bridges
         usbPrint?.let {
@@ -174,6 +177,10 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
+    }
+    override fun onPause() {
+        super.onPause()
+        CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {

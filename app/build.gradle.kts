@@ -18,8 +18,8 @@ android {
         // Android 10
         targetSdk = 29
 
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "1.6"
     }
 
     buildTypes {
