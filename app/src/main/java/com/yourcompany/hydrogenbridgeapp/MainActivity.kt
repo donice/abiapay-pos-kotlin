@@ -92,25 +92,29 @@ class MainActivity : AppCompatActivity() {
 
     inner class PaymentBridge {
         @JavascriptInterface
-        fun initiateCardPayment(amount: Float) {
+        fun initiateCardPayment(amount: Float, customRef: String) {
             Log.d("HydrogenPayment", "initiateCardPayment: $amount")
             runOnUiThread {
-                launchHydrogenIntent("com.hydrogen.card_payment", amount)
+                launchHydrogenIntent("com.hydrogen.card_payment", amount, customRef)
             }
         }
 
         @JavascriptInterface
-        fun initiateTransfer(amount: Float) {
+        fun initiateTransfer(amount: Float, customRef: String) {
             Log.d("HydrogenPayment", "initiateTransfer: $amount")
             runOnUiThread {
-                launchHydrogenIntent("com.hydrogen.transfer", amount)
+                launchHydrogenIntent(
+                    "com.hydrogen.transfer", amount,
+                    customRef
+                )
             }
         }
 
-        private fun launchHydrogenIntent(action: String, amount: Float) {
+        private fun launchHydrogenIntent(action: String, amount: Float, customRef: String) {
             try {
                 val intent = Intent(action).apply {
                     putExtra("REQUEST_KEY", amount)
+                    putExtra("CUSTOM_REF_KEY", customRef)
                 }
                 startActivityForResult(intent, PAYMENT_REQUEST_CODE)
             } catch (e: Exception) {
@@ -128,8 +132,8 @@ class MainActivity : AppCompatActivity() {
             val isApproved = resultString.contains("responseCode=00") || resultString.contains("SUCCESS")
 
             val status = when {
-                resultCode == Activity.RESULT_OK && isApproved -> "SUCCESS"
-                resultString.contains("CANCELLED") || resultCode == Activity.RESULT_CANCELED -> "CANCELLED"
+                resultCode == RESULT_OK && isApproved -> "SUCCESS"
+                resultString.contains("CANCELLED") || resultCode == RESULT_CANCELED -> "CANCELLED"
                 else -> "FAILED"
             }
 
