@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(webView)
 
         // Load your application URL
-        webView.loadUrl("https://abiapay-pos.vercel.app/signin/")
+        webView.loadUrl("https://hydrogen.abiaone.com/signin/")
     }
 
     private fun setupWebView() {
