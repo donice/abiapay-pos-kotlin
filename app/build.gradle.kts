@@ -13,13 +13,13 @@ android {
         applicationId = "com.yourcompany.hydrogenbridgeapp"
 
         // Android 7.0+ devices
-        minSdk = 24
+        minSdk = 25
 
         // Android 10
         targetSdk = 29
 
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 8
+        versionName = "1.8"
     }
 
     buildTypes {
@@ -36,6 +36,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+    aaptOptions {
+        noCompress ("jpg","bmp" )// 禁用png压缩
+    }
 
     kotlinOptions {
         jvmTarget = "1.8"
@@ -46,4 +49,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
+
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    implementation("com.github.yuriy-budiyev:code-scanner:2.3.0")
 }
