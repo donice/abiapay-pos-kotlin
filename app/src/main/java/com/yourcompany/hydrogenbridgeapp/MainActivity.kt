@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
 
         setContentView(webView)
-        webView.loadUrl("https://abiapay-pos-donice.vercel.app/signin")
+        webView.loadUrl("https://hydrogen.abiaone.com/signin")
     }
 
     private fun checkWebViewVersion() {
