@@ -13,13 +13,13 @@ android {
         applicationId = "com.yourcompany.hydrogenbridgeapp"
 
         // Android 7.0+ devices
-        minSdk = 25
+        minSdk = 28
 
         // Android 10
-        targetSdk = 29
+        targetSdk = 33
 
-        versionCode = 8
-        versionName = "1.8"
+        versionCode = 9
+        versionName = "2.0"
     }
 
     buildTypes {
@@ -36,6 +36,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     aaptOptions {
         noCompress ("jpg","bmp" )// 禁用png压缩
     }

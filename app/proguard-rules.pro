@@ -17,3 +17,7 @@
 
 -dontwarn com.yourcompany.hydrogenbridgeapp.**
 -keep class com.yourcompany.hydrogenbridgeapp.** { *; }
+
+# Keep Telpo SDK classes (which use reflection internally)
+-keep class com.common.** { *; }
+-dontwarn com.common.**
